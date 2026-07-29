@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+
+  # Wazuh Manager : analyse sécurité
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.7.3
+    container_name: wazuh-manager
+    restart: always
+    ports:
+      - "1514:1514/udp"
+      - "1515:1515"
+      - "514:514/udp"
+    volumes:
+      - ./wazuh_data:/var/ossec/data
+    networks:
+      - wazuh-net
+
+  # Wazuh Indexer (OpenSearch)
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.7.3
+    container_name: wazuh-indexer
+    environment:
+      - "discovery.type=single-node"
+    ports:
+      - "9200:9200"
+    networks:
+      - wazuh-net
+
+  # Wazuh Dashboard (interface web)
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.7.3
+    container_name: wazuh-dashboard
+    ports:
+      - "5601:5601"
+    depends_on:
+      - wazuh-indexer
+    networks:
+      - wazuh-net
+
+networks:
+  wazuh-net:
+    driver: bridge

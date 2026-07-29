@@ -1,0 +1,3 @@
+volumes/
+wazuh/wazuh_data/
+.claude/settings.local.json
