@@ -1,3 +1,7 @@
 volumes/
-wazuh/wazuh_data/
 .claude/settings.local.json
+.env
+wazuh/.env
+wazuh/config/wazuh_indexer_ssl_certs/
+wazuh/config/wazuh_dashboard/wazuh.yml
+wazuh/_official_ref/
