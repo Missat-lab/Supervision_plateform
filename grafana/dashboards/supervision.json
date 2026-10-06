@@ -114,6 +114,20 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{ "expr": "{job=\"wazuh\"}", "refId": "A" }],
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 62, "type": "barchart", "title": "Alertes par niveau de severite",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "expr": "sum by (rule_level) (count_over_time({job=\"wazuh\"}[$__range]))", "legendFormat": "niveau {{rule_level}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 63, "type": "table", "title": "Alertes par agent",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{ "expr": "sum by (agent_name) (count_over_time({job=\"wazuh\"}[$__range]))", "legendFormat": "{{agent_name}}", "refId": "A", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     }
   ]
 }

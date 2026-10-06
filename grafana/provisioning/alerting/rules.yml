@@ -129,3 +129,49 @@ groups:
                   reducer:
                     type: last
                   type: query
+
+      # Alertes de securite critiques remontees par Wazuh (niveau de regle >= 12)
+      - uid: alertes-wazuh-critiques
+        title: "Alertes de securite critiques (Wazuh)"
+        condition: B
+        for: 10s
+        # Loki ne renvoie aucune serie quand le filtre rule_level ne correspond a
+        # aucune ligne (contrairement a Prometheus qui renverrait 0) : sans ce
+        # reglage, l'absence d'alerte critique serait interpretee comme NoData
+        # et notifiee comme une alerte "DatasourceNoData" par defaut.
+        noDataState: OK
+        labels:
+          severity: critical
+          volet: securite
+        annotations:
+          summary: "Au moins une alerte Wazuh de niveau critique (>=12) sur les 5 dernieres minutes"
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: count_over_time({job="wazuh", rule_level=~"1[2-9]|[2-9][0-9]"}[5m])
+              instant: true
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              type: classic_conditions
+              refId: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: ["A"]
+                  reducer:
+                    type: last
+                  type: query
