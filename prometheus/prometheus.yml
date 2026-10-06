@@ -3,7 +3,76 @@ global:
 
 scrape_configs:
 
-  # Surveillance du node exporter
+  # Surveillance de Prometheus lui-meme
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Surveillance du node exporter (serveur hote)
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
+
+  # Metriques de consommation par conteneur (intervalle allonge : le scan
+  # des couches overlay2 est lent sous Docker Desktop/WSL2)
+  - job_name: 'cadvisor'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Disponibilite et latence des liaisons reseau (ICMP)
+  - job_name: 'reseau-icmp'
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets:
+          - host.docker.internal   # passerelle / hote local
+          - 8.8.8.8                # sortie Internet
+          - 1.1.1.1                # second point de controle externe
+        labels:
+          type: 'liaison'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Disponibilite des services applicatifs de la plateforme (HTTP)
+  - job_name: 'reseau-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://grafana:3000/login
+          - http://prometheus:9090/-/healthy
+          - http://loki:3100/ready
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Compteurs d'interface des equipements administrables (SNMP)
+  - job_name: 'reseau-snmp'
+    static_configs:
+      - targets:
+          - snmp-agent
+        labels:
+          type: 'equipement'
+    metrics_path: /snmp
+    params:
+      module: [if_mib]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp-exporter:9116

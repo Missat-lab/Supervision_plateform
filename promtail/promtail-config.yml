@@ -26,3 +26,21 @@ scrape_configs:
         labels:
           job: dockerlogs
           __path__: /var/lib/docker/containers/*/*.log
+
+  # Alertes de securite qualifiees par Wazuh (section 3.7.4 du rapport)
+  - job_name: wazuh-alerts
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: wazuh
+          __path__: /var/log/wazuh/alerts/alerts.json
+    pipeline_stages:
+      - json:
+          expressions:
+            rule_level: rule.level
+            rule_description: rule.description
+            agent_name: agent.name
+      - labels:
+          rule_level:
+          agent_name:

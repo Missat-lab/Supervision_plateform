@@ -11,12 +11,73 @@ services:
     networks:
       - monitoring
 
-  # Service Node Exporter : expose les métriques du système
+  # Service Node Exporter : expose les métriques du système hôte
   node-exporter:
     image: prom/node-exporter:latest
     restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     ports:
       - "9100:9100"
+    networks:
+      - monitoring
+
+  # Service cAdvisor : métriques de consommation par conteneur
+  # (metriques disque desactivees : le scan "du" des couches overlay2 est
+  # tres lent sous Docker Desktop/WSL2 et faisait expirer le scrape)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    restart: unless-stopped
+    privileged: true
+    command:
+      - '--docker_only=true'
+      - '--disable_metrics=disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl,tcp,udp'
+      - '--housekeeping_interval=10s'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    expose:
+      - "8080"
+    networks:
+      - monitoring
+
+  # Service Blackbox Exporter : sondes actives ICMP, TCP, HTTP, DNS
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    restart: unless-stopped
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml
+    expose:
+      - "9115"
+    networks:
+      - monitoring
+
+  # Service SNMP Exporter : collecte passive des compteurs d'interface
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    restart: unless-stopped
+    volumes:
+      - ./snmp/snmp.yml:/etc/snmp_exporter/snmp.yml
+    expose:
+      - "9116"
+    networks:
+      - monitoring
+
+  # Agent SNMP simule (equipement reseau de test, communaute "public")
+  snmp-agent:
+    build: ./snmp/agent
+    restart: unless-stopped
+    expose:
+      - "161/udp"
     networks:
       - monitoring
 
@@ -27,6 +88,12 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GRAFANA_ALERT_EMAIL=${GRAFANA_ALERT_EMAIL:-admin@example.com}
+      - GF_SMTP_ENABLED=${GF_SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${GF_SMTP_HOST:-smtp.gmail.com:587}
+      - GF_SMTP_USER=${GF_SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${GF_SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS:-}
     volumes:
       - ./volumes/grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
@@ -68,7 +135,7 @@ services:
     networks:
       - monitoring
 
-  # Service Promtail : collecte des logs
+  # Service Promtail : collecte des logs (systeme, conteneurs, alertes Wazuh)
   promtail:
     image: grafana/promtail:latest
     restart: unless-stopped
@@ -76,6 +143,7 @@ services:
       - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers
+      - wazuh_logs:/var/log/wazuh:ro
     command: -config.file=/etc/promtail/promtail-config.yml
     networks:
       - monitoring
@@ -83,3 +151,10 @@ services:
 networks:
   monitoring:
     driver: bridge
+
+volumes:
+  # Volume partage en lecture seule avec la pile Wazuh (wazuh/docker-compose.yml)
+  # pour remonter les alertes qualifiees vers Loki (section 3.7.4 du rapport)
+  wazuh_logs:
+    external: true
+    name: wazuh_wazuh_logs
